@@ -28,7 +28,8 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt
-
+from cloudinary.uploader import upload, destroy
+import re
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
@@ -1044,10 +1045,7 @@ def add_product(request):
 @csrf_exempt
 def edit_product(request, product_id):
     if request.method == 'GET':
-        # Retrieve the product to be edited
         product = get_object_or_404(Product, id=product_id)
-
-        # Prepare the response data
         product_data = {
             "id": product.id,
             "name": product.name,
@@ -1058,23 +1056,37 @@ def edit_product(request, product_id):
             "description": product.description,
             "is_bestseller": product.is_bestseller,
             "discount_percentage": product.discount_percentage,
-            "image": product.image  # Image URL
+            "image": product.image
         }
-
         return JsonResponse(product_data, status=200)
 
     elif request.method == 'POST':
         try:
-            # Retrieve the product to be edited
             product = get_object_or_404(Product, id=product_id)
 
-            # Check if the request contains files and form-data
-            if request.FILES.get('image'):  # Check for image file
-                image_file = request.FILES['image']
-            else:
-                image_file = None  # In case no image is uploaded
+            image_file = request.FILES.get('image', None)
+            image_url = product.image  # Default to current image
 
-            # Get other data from the form (using request.POST)
+            # If a new image is uploaded
+            if image_file:
+                # Delete the old image from Cloudinary
+                if product.image:
+                    try:
+                        match = re.search(r'product_images/([^\.]+)', product.image)
+                        if match:
+                            public_id = f"product_images/{match.group(1)}"
+                            destroy(public_id)
+                    except Exception as e:
+                        return JsonResponse({"error": f"Failed to delete old image: {str(e)}"}, status=500)
+
+                # Upload new image to Cloudinary
+                try:
+                    upload_result = upload(image_file, folder="product_images/")
+                    image_url = upload_result['secure_url']
+                except Exception as e:
+                    return JsonResponse({"error": f"Image upload failed: {str(e)}"}, status=500)
+
+            # Get form data
             name = request.POST.get('name', product.name)
             category_name = request.POST.get('category_name', product.category.name if product.category else '')
             brand_name = request.POST.get('brand_name', product.brand.name if product.brand else '')
@@ -1088,20 +1100,10 @@ def edit_product(request, product_id):
             if not name or not category_name or not brand_name or not price:
                 return JsonResponse({"error": "Name, category_name, brand_name, and price are required."}, status=400)
 
-            # Retrieve related objects by name
             category = get_object_or_404(Category, name=category_name)
             brand = get_object_or_404(Brand, name=brand_name)
 
-            # Handle image upload to Cloudinary (if new image is provided)
-            image_url = product.image  # Keep the existing image URL by default
-            if image_file:
-                try:
-                    upload_result = upload(image_file, folder="product_images/")
-                    image_url = upload_result['secure_url']
-                except Exception as e:
-                    return JsonResponse({"error": f"Image upload failed: {str(e)}"}, status=500)
-
-            # Update the product instance with new data
+            # Update product
             product.name = name
             product.category = category
             product.brand = brand
@@ -1110,9 +1112,7 @@ def edit_product(request, product_id):
             product.description = description
             product.is_bestseller = is_bestseller
             product.discount_percentage = discount_percentage
-            product.image = image_url  # Save the Cloudinary image URL
-
-            # Save the updated product
+            product.image = image_url
             product.save()
 
             return JsonResponse({
@@ -1123,11 +1123,11 @@ def edit_product(request, product_id):
                     "category": product.category.name,
                     "brand": product.brand.name,
                     "price": str(product.price),
-                    "stock":product.stock,
+                    "stock": product.stock,
                     "description": product.description,
                     "is_bestseller": product.is_bestseller,
                     "discount_percentage": product.discount_percentage,
-                    "image": product.image,  # Return Cloudinary image URL
+                    "image": product.image,
                     "created_at": product.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 }
             }, status=200)
@@ -1142,13 +1142,21 @@ def edit_product(request, product_id):
 def delete_product(request, product_id):
     if request.method == 'DELETE':
         try:
-            # Retrieve the category instance by ID
-            products = get_object_or_404(Product, id=product_id)
+            product = get_object_or_404(Product, id=product_id)
 
-            # Delete the category
-            products.delete()
+            # Delete Cloudinary image
+            if product.image:
+                try:
+                    match = re.search(r'product_images/([^\.]+)', product.image)
+                    if match:
+                        public_id = f"product_images/{match.group(1)}"
+                        destroy(public_id)
+                except Exception as e:
+                    return JsonResponse({"error": f"Failed to delete image from Cloudinary: {str(e)}"}, status=500)
 
+            product.delete()
             return JsonResponse({"message": "Product deleted successfully"}, status=200)
+
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
     else:
