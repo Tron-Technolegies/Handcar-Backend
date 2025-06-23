@@ -140,6 +140,7 @@ urlpatterns = [
     path('vendor_dashboard/<int:vendor_id>/', views.vendor_dashboard, name='vendor_dashboard'),
     path('product_average_rating', views.product_average_rating, name='product_average_rating'),
     path('service_average_rating',views.service_average_rating,name='service_average_rating'),
+    path('delete_serviceimage', views.delete_serviceimage, name='delete_serviceimage'),
 
 ]
 

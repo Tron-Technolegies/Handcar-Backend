@@ -3060,7 +3060,6 @@ def edit_vendor_profile(request, vendor_id):
 
     return JsonResponse({"error": "Invalid HTTP method."}, status=405)
 
-
 @csrf_exempt
 @api_view(['DELETE'])
 @permission_classes([IsAdminUser])
@@ -3729,7 +3728,19 @@ def product_average_rating(request, product_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-
+@csrf_exempt
+def delete_serviceimage(request, image_id):
+    if request.method == 'DELETE':
+        try:
+            image = get_object_or_404(ServiceImage, id=image_id)
+            if image.public_id:
+                destroy(image.public_id)
+            image.delete()
+            return JsonResponse({'message': 'Image deleted successfully'}, status=200)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Invalid HTTP method'}, status=405)
 
 
 
