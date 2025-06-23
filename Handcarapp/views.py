@@ -2985,13 +2985,14 @@ def view_services_by_admin(request):
                  "Joined at": vendor.created_at.strftime("%Y-%m-%d %H:%M:%S")} for vendor in vendors]
         return JsonResponse({"vendor": data}, safe=False)
 
-
 @csrf_exempt
 def edit_vendor_profile(request, vendor_id):
     if request.method == 'GET':
         try:
+            # Retrieve the vendor
             vendor = get_object_or_404(Services, id=vendor_id)
 
+            # Return vendor data as JSON
             vendor_data = {
                 "vendor_name": vendor.vendor_name,
                 "email": vendor.email,
@@ -3012,23 +3013,28 @@ def edit_vendor_profile(request, vendor_id):
 
     elif request.method == 'POST':
         try:
+            # Retrieve the vendor to be edited
             vendor = get_object_or_404(Services, id=vendor_id)
+
+            # Parse JSON data
             data = request.POST
 
-            # Update vendor fields
-            vendor.vendor_name = data.get('vendor_name', vendor.vendor_name)
-            vendor.email = data.get('email', vendor.email)
-            vendor.phone_number = data.get('phone_number', vendor.phone_number)
-            vendor.whatsapp_number = data.get('whatsapp_number', vendor.whatsapp_number)
+            # Update fields if provided
+            vendor.vendor_name = data.get('vendor_name', vendor.vendor_name)  # Vendor can edit name
+            vendor.email = data.get('email', vendor.email)  # Vendor can edit email
+            vendor.phone_number = data.get('phone_number', vendor.phone_number)  # Vendor can edit phone number
 
+            # Vendor-specific fields that only vendors can update
+            vendor.whatsapp_number = data.get('whatsapp_number', vendor.whatsapp_number)
+            # vendor.address = data.get('address', vendor.address)
             new_address = data.get('address')
             if new_address and new_address != vendor.address:
                 vendor.address = new_address
+                print(f"New address set: {new_address}")
                 vendor.latitude, vendor.longitude = geocode_address(new_address)
-
+                print(f"Geocoded latitude: {vendor.latitude}, longitude: {vendor.longitude}")
             vendor.service_details = data.get('service_details', vendor.service_details)
             vendor.rate = data.get('rate', vendor.rate)
-
             service_category_name = data.get('service_category')
             if service_category_name:
                 service_category = ServiceCategory.objects.filter(name=service_category_name).first()
@@ -3036,37 +3042,23 @@ def edit_vendor_profile(request, vendor_id):
                     vendor.service_category = service_category
                 else:
                     return JsonResponse({"error": "Invalid service category name."}, status=400)
-
             vendor.save()
 
-            # Handle image updates
             if 'images' in request.FILES:
-                # Delete old images from Cloudinary
-                existing_images = ServiceImage.objects.filter(service=vendor)
-                for img in existing_images:
-                    if img.public_id:
-                        destroy(img.public_id)
-                    img.delete()
-
-                # Upload new images
-                uploaded_images = request.FILES.getlist('images')
+                uploaded_images = request.FILES.getlist('images')  # Get the uploaded files
                 for image in uploaded_images:
+                    # Upload each image to Cloudinary
                     cloudinary_response = upload(image)
-                    image_url = cloudinary_response['secure_url']
-                    public_id = cloudinary_response['public_id']
-                    ServiceImage.objects.create(
-                        service=vendor,
-                        image=image_url,
-                        public_id=public_id
-                    )
+                    image_url = cloudinary_response['secure_url']  # Get the secure URL from the response
 
+                    # Save the image URL in the ServiceImage model
+                    ServiceImage.objects.create(service=vendor, image=image_url)
             return JsonResponse({"message": "Vendor updated successfully."}, status=200)
 
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid HTTP method."}, status=405)
-
 
 
 @csrf_exempt
