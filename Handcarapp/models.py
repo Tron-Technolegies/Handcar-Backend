@@ -257,6 +257,7 @@ class Subscriber(models.Model):
 class ServiceImage(models.Model):
     service = models.ForeignKey('Services', on_delete=models.CASCADE, related_name='images')
     image = CloudinaryField('image') # Stores the image in the 'service_images' directory
+    public_id = models.CharField(max_length=255, blank=True, null=True) # Stores the Cloudinary public_id helps to delete the image
     uploaded_at = models.DateTimeField(auto_now_add=True)  # Tracks when the image was uploaded
 
     def __str__(self):
