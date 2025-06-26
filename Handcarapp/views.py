@@ -3743,6 +3743,40 @@ def delete_serviceimage(request, image_id):
         return JsonResponse({'error': 'Invalid HTTP method'}, status=405)
 
 
+from django.core.mail import EmailMessage
+from django.http import JsonResponse
+from django.conf import settings
+from .models import Order
+from .utils import generate_invoice_pdf
+
+def confirm_order(request):
+    if request.method == "POST":
+        user = request.user
+        order_id = request.POST.get("order_id")
+
+        try:
+            order = Order.objects.get(id=order_id, user=user)
+            order.status = "confirmed"
+            order.save()
+
+            # Generate the invoice PDF
+            invoice_pdf = generate_invoice_pdf(order)
+
+            subject = "Your Order Invoice - Handcar"
+            message = f"Hi {user.username},\n\nThanks for your purchase! Please find your invoice attached.\n\nRegards,\nHandcar Team"
+            from_email = settings.EMAIL_HOST_USER
+            to_email = [user.email]
+
+            email = EmailMessage(subject, message, from_email, to_email)
+            email.attach(f"Invoice_{order.id}.pdf", invoice_pdf.read(), "application/pdf")
+            email.send()
+
+            return JsonResponse({'status': 'success', 'message': 'Order confirmed and invoice sent!'})
+
+        except Order.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Order not found'})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
 
 
 def home(request):
