@@ -3325,7 +3325,88 @@ def change_vendor_password(request, vendor_id):
 
 
 
-User = get_user_model()
+# User = get_user_model()
+
+# @api_view(['POST'])
+# @authentication_classes([CustomJWTAuthentication])
+# @permission_classes([IsAuthenticated])
+# def place_order(request):
+#     try:
+#         data = request.data
+#         user = request.user
+#         name = data.get('username')
+#         contact = data.get('contact')
+#         address = data.get('address')
+#         coupon_data = data.get('coupon')
+#         coupon = json.dumps(coupon_data) if coupon_data else None
+
+#         cart_items = data.get('cartItems', [])
+#         total_price = data.get('totalPrice')
+
+#         if not cart_items:
+#             return Response({'error': 'Cart is empty'}, status=400)
+
+#         # Prepare product list and update stock
+#         items = []
+#         for item in cart_items:
+#             product_id = item.get('product_id')  # Fixed key
+#             quantity = item.get('quantity')
+
+#             try:
+#                 product = Product.objects.get(id=product_id)
+#             except Product.DoesNotExist:
+#                 return Response({'error': f"Product with ID {product_id} not found"}, status=404)
+
+#             if product.stock < quantity:
+#                 return Response({'error': f"Insufficient stock for {product.name}"}, status=400)
+
+#             product.stock -= quantity
+#             product.save()
+
+#             items.append({
+#                 'id': product.id,
+#                 'name': product.name,
+#                 'price': str(product.price),
+#                 'quantity': quantity
+#             })
+
+#         # Generate unique order ID
+#         order_id = str(uuid.uuid4()).replace('-', '')[:12].upper()
+
+#         # Create Order
+#         order = Order.objects.create(
+#             user=user,
+#             order_id=order_id,
+#             name=name,
+#             contact=contact,
+#             address=address,
+#             products=json.dumps(items),
+#             total_price=total_price,
+#             status='pending',
+#             coupon=coupon,
+#             created_at=timezone.now()
+#         )
+#         # Clear the cart
+#         CartItem.objects.filter(user=user).delete()
+
+#         return Response({
+#             'message': 'Order placed successfully',
+#             'order_id': order_id,
+#             'order_details': {
+#             'name': name,
+#             'contact': contact,
+#             'address': address,
+#             'items': items,
+#             'total_price': total_price,
+#             'status': 'pending',
+#             'created_at': order.created_at,
+#             'coupon': json.loads(order.coupon) if order.coupon else None  
+#              }
+#         }, status=200)
+
+#     except Exception as e:
+#         return Response({'error': str(e)}, status=500)
+
 
 @api_view(['POST'])
 @authentication_classes([CustomJWTAuthentication])
@@ -3349,7 +3430,7 @@ def place_order(request):
         # Prepare product list and update stock
         items = []
         for item in cart_items:
-            product_id = item.get('product_id')  # Fixed key
+            product_id = item.get('product_id')
             quantity = item.get('quantity')
 
             try:
@@ -3386,6 +3467,22 @@ def place_order(request):
             coupon=coupon,
             created_at=timezone.now()
         )
+
+        # Send invoice email with PDF attachment
+        try:
+            invoice_pdf = generate_invoice_pdf(order)
+            subject = "Your Order Invoice - Handcar"
+            message = f"Hi {user.username},\n\nThanks for your purchase! Please find your invoice attached.\n\nRegards,\nHandcar Team"
+            from_email = settings.EMAIL_HOST_USER
+            to_email = [user.email]
+
+            if user.email:  # Ensure user has email
+                email = EmailMessage(subject, message, from_email, to_email)
+                email.attach(f"Invoice_{order.order_id}.pdf", invoice_pdf.read(), "application/pdf")
+                email.send()
+        except Exception as e:
+            print(f"Error sending email: {str(e)}")
+
         # Clear the cart
         CartItem.objects.filter(user=user).delete()
 
@@ -3393,15 +3490,15 @@ def place_order(request):
             'message': 'Order placed successfully',
             'order_id': order_id,
             'order_details': {
-            'name': name,
-            'contact': contact,
-            'address': address,
-            'items': items,
-            'total_price': total_price,
-            'status': 'pending',
-            'created_at': order.created_at,
-            'coupon': json.loads(order.coupon) if order.coupon else None  
-             }
+                'name': name,
+                'contact': contact,
+                'address': address,
+                'items': items,
+                'total_price': total_price,
+                'status': 'pending',
+                'created_at': order.created_at,
+                'coupon': json.loads(order.coupon) if order.coupon else None
+            }
         }, status=200)
 
     except Exception as e:

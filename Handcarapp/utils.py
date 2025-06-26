@@ -59,8 +59,10 @@ def get_nearby_vendors(subscriber_lat, subscriber_lon):
                 nearby.append(vendor)
     return nearby
 
+
 from reportlab.pdfgen import canvas
 from io import BytesIO
+import json
 
 def generate_invoice_pdf(order):
     buffer = BytesIO()
@@ -70,16 +72,29 @@ def generate_invoice_pdf(order):
     p.drawString(100, 800, "Invoice - Handcar")
 
     p.setFont("Helvetica", 12)
-    p.drawString(100, 770, f"Order ID: {order.id}")
+    p.drawString(100, 770, f"Order ID: {order.order_id}")
     p.drawString(100, 750, f"Customer: {order.user.username}")
-    p.drawString(100, 730, f"Product: {order.product.name}")
-    p.drawString(100, 710, f"Total Price: ₹{order.total_price}")
-    p.drawString(100, 690, f"Address: {order.shipping_address}")
-    p.drawString(100, 670, f"Date: {order.created_at.strftime('%d-%m-%Y')}")
+    p.drawString(100, 730, f"Total Price: ₹{order.total_price}")
+    p.drawString(100, 710, f"Address: {order.address}")
+    p.drawString(100, 690, f"Date: {order.created_at.strftime('%d-%m-%Y')}")
+
+    # Add product list header
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, 660, "Products:")
+    y = 640
+
+    p.setFont("Helvetica", 11)
+    try:
+        products = json.loads(order.products)
+        for product in products:
+            line = f"- {product['name']} (Qty: {product['quantity']}, Price: ₹{product['price']})"
+            p.drawString(110, y, line)
+            y -= 20
+    except Exception as e:
+        p.drawString(110, y, f"Error loading products: {str(e)}")
 
     p.showPage()
     p.save()
 
     buffer.seek(0)
     return buffer
-
