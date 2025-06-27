@@ -3469,24 +3469,10 @@ def place_order(request):
             created_at=timezone.now()
         )
 
-        # Send invoice email with PDF attachment
-        try:
-            invoice_pdf = generate_invoice_pdf(order)
-            subject = "Your Order Invoice - Handcar"
-            message = f"Hi {user.username},\n\nThanks for your purchase! Please find your invoice attached.\n\nRegards,\nHandcar Team"
-            from_email = settings.EMAIL_HOST_USER
-            to_email = [user.email]
-
-            if user.email:  # Ensure user has email
-                email = EmailMessage(subject, message, from_email, to_email)
-                email.attach(f"Invoice_{order.order_id}.pdf", invoice_pdf.read(), "application/pdf")
-                email.send()
-        except Exception as e:
-            print(f"Error sending email: {str(e)}")
-
         # Clear the cart
         CartItem.objects.filter(user=user).delete()
 
+        # Return success response
         return Response({
             'message': 'Order placed successfully',
             'order_id': order_id,
@@ -3545,7 +3531,6 @@ def my_orders(request):
     return Response({'orders': order_list}, status=200)
 
 
-
 @api_view(['PATCH'])
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAdminUser])
@@ -3554,14 +3539,29 @@ def update_order_status(request, order_id):
         order = Order.objects.get(order_id=order_id)
         new_status = request.data.get('status')
 
-        # Fetch valid statuses from the model choices
         valid_statuses = [status[0] for status in Order.STATUS_CHOICES]
-
         if new_status not in valid_statuses:
             return Response({'error': f"Invalid status. Valid options are: {', '.join(valid_statuses)}"}, status=400)
 
+        send_email = new_status == 'confirmed' and order.status != 'confirmed'
         order.status = new_status
         order.save()
+
+        if send_email:
+            try:
+                invoice_pdf = generate_invoice_pdf(order)
+                first_name = order.user.first_name or order.user.username
+                subject = "Your Order is Confirmed - Handcar"
+                message = f"Hi {first_name},\n\nYour order has been confirmed. Please find the invoice attached.\n\nThanks,\nHandcar Team"
+                from_email = settings.EMAIL_HOST_USER
+                to_email = [order.user.email]
+
+                if order.user.email:
+                    email = EmailMessage(subject, message, from_email, to_email)
+                    email.attach(f"Invoice_{order.order_id}.pdf", invoice_pdf.read(), "application/pdf")
+                    email.send()
+            except Exception as e:
+                print(f"Error sending confirmation email: {e}")
 
         return Response({'message': f"Order status updated to '{new_status}'"}, status=200)
 
