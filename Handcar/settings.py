@@ -166,6 +166,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+SITE_URL = "https://handcar.ae/"
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/

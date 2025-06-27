@@ -29,6 +29,8 @@ from django.utils.decorators import method_decorator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt
 from cloudinary.uploader import upload, destroy
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 import re
 from rest_framework import status
 from rest_framework.decorators import (
@@ -3198,7 +3200,6 @@ def delete_service_category(request, service_category_id):
 @csrf_exempt
 def forgot_password(request):
     if request.method == 'POST':
-        # Get the email address from the request body (sent from React frontend)
         try:
             data = json.loads(request.body)
             email = data.get('email')
@@ -3207,31 +3208,32 @@ def forgot_password(request):
                 return JsonResponse({"error": "Email is required."}, status=400)
 
             # Fetch user by email
-            user = get_user_model().objects.filter(email=email).first()
+            User = get_user_model()
+            user = User.objects.filter(email=email).first()
             if not user:
                 return JsonResponse({"error": "No user found with this email."}, status=404)
 
-            # Generate password reset token
+            # Generate password reset token and UID
             token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(str(user.pk).encode())
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
 
-            # Create the password reset URL
+            # Construct reset URL
             reset_url = f"{settings.SITE_URL}/reset-password/{uid}/{token}"
 
-            # Send plain text email
+            # Prepare email
             subject = "Password Reset Requested"
             message = f"""
-            Hi {user.username},
+Hi {user.username},
 
-            You requested a password reset. To reset your password, click the link below:
+You requested a password reset. To reset your password, click the link below:
 
-            {reset_url}
+{reset_url}
 
-            If you didn't request this, you can ignore this email.
+If you didn't request this, you can ignore this email.
 
-            Regards,
-            Team Handcar 
-            """
+Regards,  
+Team Handcar
+"""
 
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
 
@@ -3242,38 +3244,37 @@ def forgot_password(request):
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
 
-
-
 @csrf_exempt
 def reset_password(request, uidb64, token):
     try:
-        # Decode the UID
+        # Decode the UID and get user
         uid = urlsafe_base64_decode(uidb64).decode()
-        user = get_user_model().objects.get(id=uid)
+        User = get_user_model()
+        user = User.objects.get(pk=uid)
 
-        # Check if the token is valid
-        if default_token_generator.check_token(user, token):
-            if request.method == 'POST':
-                data = json.loads(request.body)
-                new_password = data.get('new_password')
-
-                if not new_password:
-                    return JsonResponse({"error": "New password is required."}, status=400)
-
-                # Set the new password and save the user
-                user.set_password(new_password)
-                user.save()
-
-                return JsonResponse({"message": "Password reset successful."}, status=200)
-
-            return JsonResponse({"error": "Invalid request method. Use POST to reset the password."}, status=405)
-
-        else:
+        # Verify token
+        if not default_token_generator.check_token(user, token):
             return JsonResponse({"error": "Invalid or expired token."}, status=400)
 
+        if request.method == 'POST':
+            data = json.loads(request.body)
+            new_password = data.get('new_password')
+
+            if not new_password:
+                return JsonResponse({"error": "New password is required."}, status=400)
+
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+
+            return JsonResponse({"message": "Password reset successful."}, status=200)
+
+        return JsonResponse({"error": "Invalid request method. Use POST."}, status=405)
+
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Invalid UID."}, status=404)
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-    
+        return JsonResponse({"error": str(e)}, status=500)    
 
 
 @csrf_exempt
