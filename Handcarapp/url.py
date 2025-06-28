@@ -142,6 +142,10 @@ urlpatterns = [
     path('service_average_rating',views.service_average_rating,name='service_average_rating'),
     path('delete_serviceimage', views.delete_serviceimage, name='delete_serviceimage'),
 
+    path('send_otp_forget_password', views.send_otp_forget_password, name='send_otp_forget_password'),
+    path('verify_otp_forget_password', views.verify_otp_forget_password, name='verify_otp_forget_password'),
+    path('reset_password_with_otp', views.reset_password_with_otp, name='reset_password_with_otp'),
+
 ]
 
 
