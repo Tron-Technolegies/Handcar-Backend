@@ -4,7 +4,7 @@ import jwt
 import logging
 from datetime import datetime, timedelta
 from urllib.parse import quote
-from random import random
+import random
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login
