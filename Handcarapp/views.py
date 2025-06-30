@@ -79,6 +79,7 @@ from .models import (
     ServiceImage,
     ServiceInteractionLog,
     Service_Rating,
+    PasswordResetOTP,
 )
 from .utils import (
     haversine,
@@ -3880,6 +3881,7 @@ def confirm_order(request):
 def home(request):
     return HttpResponse("Hi handcar")
 
+
 @csrf_exempt
 def send_otp_forget_password(request):
     if request.method == 'POST':
@@ -3896,19 +3898,21 @@ def send_otp_forget_password(request):
                 return JsonResponse({"error": "No user found with this email."}, status=404)
 
             otp = random.randint(1000, 9999)
-            cache.set(f"otp_{email}", otp, timeout=300)  # 5 minutes
+            PasswordResetOTP.objects.create(user=user, otp=otp)
             name = user.first_name or user.username
-            subject = "Your OTP for Password Reset"
-            message = f"Hi {name},\n\nYour OTP is: {otp}\nIt will expire in 5 minutes.\n\nRegards,\nTeam Handcar"
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
 
-            return JsonResponse({"message": "OTP sent to email."}, status=200)
+            send_mail(
+                subject="Your OTP for Password Reset",
+                message=f"Hi {name},\n\nYour OTP is: {otp}\n\nIt will expire in 10 minutes.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+            )
 
+            return JsonResponse({"message": "OTP sent to email."})
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
-
 
 @csrf_exempt
 def verify_otp_forget_password(request):
@@ -3916,26 +3920,31 @@ def verify_otp_forget_password(request):
         try:
             data = json.loads(request.body)
             email = data.get('email')
-            otp_entered = data.get('otp')
+            otp = data.get('otp')
 
-            if not email or not otp_entered:
+            if not email or not otp:
                 return JsonResponse({"error": "Email and OTP are required."}, status=400)
 
-            otp_stored = cache.get(f"otp_{email}")
-            if otp_stored is None:
-                return JsonResponse({"error": "OTP expired or not found."}, status=400)
+            User = get_user_model()
+            user = User.objects.filter(email=email).first()
+            if not user:
+                return JsonResponse({"error": "User not found."}, status=404)
 
-            if str(otp_stored) != str(otp_entered):
-                return JsonResponse({"error": "Invalid OTP."}, status=400)
+            otp_obj = PasswordResetOTP.objects.filter(user=user, otp=otp).order_by('-created_at').first()
+            if not otp_obj or not otp_obj.is_valid():
+                return JsonResponse({"error": "Invalid or expired OTP."}, status=400)
 
-            cache.set(f"verified_{email}", True, timeout=600)
-            return JsonResponse({"message": "OTP verified successfully."}, status=200)
+            # Optional: mark verified in session or cache
+            request.session[f'otp_verified_{user.id}'] = True
 
+            # Delete OTP after verification
+            otp_obj.delete()
+
+            return JsonResponse({"message": "OTP verified successfully."})
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
-
 
 @csrf_exempt
 def reset_password_with_otp(request):
@@ -3952,22 +3961,22 @@ def reset_password_with_otp(request):
             if new_password != confirm_password:
                 return JsonResponse({"error": "Passwords do not match."}, status=400)
 
-            if not cache.get(f"verified_{email}"):
-                return JsonResponse({"error": "OTP not verified or expired."}, status=403)
-
             User = get_user_model()
             user = User.objects.filter(email=email).first()
             if not user:
                 return JsonResponse({"error": "User not found."}, status=404)
 
+            #  Check OTP was verified (via session or another mechanism)
+            if not request.session.get(f'otp_verified_{user.id}'):
+                return JsonResponse({"error": "OTP not verified."}, status=403)
+
             user.set_password(new_password)
             user.save()
 
-            cache.delete(f"otp_{email}")
-            cache.delete(f"verified_{email}")
+            #  Clean up session
+            del request.session[f'otp_verified_{user.id}']
 
-            return JsonResponse({"message": "Password reset successful."}, status=200)
-
+            return JsonResponse({"message": "Password reset successful."})
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
