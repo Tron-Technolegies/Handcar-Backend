@@ -3897,9 +3897,9 @@ def send_otp_forget_password(request):
 
             otp = random.randint(1000, 9999)
             cache.set(f"otp_{email}", otp, timeout=300)  # 5 minutes
-
+            name = user.first_name or user.username
             subject = "Your OTP for Password Reset"
-            message = f"Hi {user.username},\n\nYour OTP is: {otp}\nIt will expire in 5 minutes.\n\nRegards,\nTeam Handcar"
+            message = f"Hi {name},\n\nYour OTP is: {otp}\nIt will expire in 5 minutes.\n\nRegards,\nTeam Handcar"
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
 
             return JsonResponse({"message": "OTP sent to email."}, status=200)
