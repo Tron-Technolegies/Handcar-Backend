@@ -137,16 +137,39 @@ class Review(models.Model):
 
 
 class Address(models.Model):
+    UAE_CITIES = [
+        ("Abu Dhabi", "Abu Dhabi"),
+        ("Dubai", "Dubai"),
+        ("Sharjah", "Sharjah"),
+        ("Ajman", "Ajman"),
+        ("Fujairah", "Fujairah"),
+        ("Ras Al Khaimah", "Ras Al Khaimah"),
+        ("Umm Al Quwain", "Umm Al Quwain"),
+        ("Al Ain", "Al Ain"),
+        ("Khor Fakkan", "Khor Fakkan"),
+        ("Dibba Al-Fujairah", "Dibba Al-Fujairah"),
+    ]
+
+    HOME = 'Home'
+    OFFICE = 'Office'
+    ADDRESS_TYPE_CHOICES = [
+        (HOME, 'Home'),
+        (OFFICE, 'Office'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="addresses")
+    country = models.CharField(max_length=100, default="United Arab Emirates")
     street = models.CharField(max_length=255)
-    city = models.CharField(max_length=100)
-    state = models.CharField(max_length=100)
-    zip_code = models.CharField(max_length=20)
-    country = models.CharField(max_length=100)
+    building_name = models.CharField(max_length=255)
+    floor_apartment_no = models.CharField(max_length=50)
+    landmark = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=50, choices=UAE_CITIES)
+    area_district = models.CharField(max_length=100)
+    address_type = models.CharField(max_length=10, choices=ADDRESS_TYPE_CHOICES, default=HOME)
     is_default = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.street}, {self.city}, {self.state}, {self.zip_code}, {self.country}"
+        return f"{self.street}, {self.building_name}, {self.city}, {self.country}"
 
 
 

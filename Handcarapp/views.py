@@ -2069,38 +2069,35 @@ def Logout(request):
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
+
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def add_address(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)  # Parse the incoming JSON data
-            street = data.get('street')
-            city = data.get('city')
-            state = data.get('state')
-            zip_code = data.get('zip_code')
-            country = data.get('country')
-            is_default = data.get('is_default', False)  # Default to False if not provided
+    try:
+        data = json.loads(request.body)
 
-            # Create a new address
-            address = Address.objects.create(
-                user=request.user,
-                street=street,
-                city=city,
-                state=state,
-                zip_code=zip_code,
-                country=country,
-                is_default=is_default
-            )
+        address = Address.objects.create(
+            user=request.user,
+            street=data.get('street'),
+            building_name=data.get('building_name'),
+            floor_apartment_no=data.get('floor_apartment_no'),
+            landmark=data.get('landmark'),
+            city=data.get('city'),
+            area_district=data.get('area_district'),
+            country=data.get('country', "United Arab Emirates"),
+            address_type=data.get('address_type', "Home"),
+            is_default=data.get('is_default', False),
+        )
 
-            return JsonResponse({'message': 'Address added successfully', 'address_id': address.id}, status=200)
+        return JsonResponse({'message': 'Address added successfully', 'address_id': address.id}, status=200)
 
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
 
-    return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -2113,13 +2110,19 @@ def view_addresses(request):
             addresses = Address.objects.filter(user=request.user).order_by('-is_default', '-id')
             
             address_list = [{
+
                 'id': address.id,
                 'street': address.street,
+                'building_name': address.building_name,
+                'floor_apartment_no': address.floor_apartment_no,
+                'landmark': address.landmark,
                 'city': address.city,
-                'state': address.state,
-                'zip_code': address.zip_code,
+                'area_district': address.area_district,
                 'country': address.country,
+                'address_type': address.address_type,
                 'is_default': address.is_default,
+
+
             } for address in addresses]
             
             return JsonResponse({
@@ -2169,8 +2172,7 @@ def delete_address(request, address_id):
     return JsonResponse({'message': 'Address deleted successfully'}, status=200)
 
 
-# 4. Shipping address selection
-@login_required
+#  Shipping address selection
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CustomJWTAuthentication])
@@ -2183,14 +2185,18 @@ def shipping_address(request):
         address_list = []
         for address in addresses:
             address_list.append({
-                'id': address.id,
-                'street': address.street,
-                'city': address.city,
-                'state': address.state,
-                'zip_code': address.zip_code,
-                'country': address.country,
-                'is_default': address.is_default,
-            })
+    'id': address.id,
+    'street': address.street,
+    'building_name': address.building_name,
+    'floor_apartment_no': address.floor_apartment_no,
+    'landmark': address.landmark,
+    'city': address.city,
+    'area_district': address.area_district,
+    'country': address.country,
+    'address_type': address.address_type,
+    'is_default': address.is_default,
+}
+)
 
         return JsonResponse({'addresses': address_list})
     #
