@@ -135,7 +135,6 @@ class Review(models.Model):
         return f"Review by {self.user.username} on {self.product.name} - Rating: {self.rating}"
 
 
-
 class Address(models.Model):
     UAE_CITIES = [
         ("Abu Dhabi", "Abu Dhabi"),
@@ -158,6 +157,8 @@ class Address(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="addresses")
+    name = models.CharField(max_length=255, null=True, blank=True)
+    phone_number = models.CharField(max_length=20, null=True, blank=True)
     country = models.CharField(max_length=100, default="United Arab Emirates")
     street = models.CharField(max_length=255)
     building_name = models.CharField(max_length=255)
@@ -169,10 +170,7 @@ class Address(models.Model):
     is_default = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.street}, {self.building_name}, {self.city}, {self.country}"
-
-
-
+        return f"{self.name} - {self.phone_number}"
 
 
 class Coupon(models.Model):

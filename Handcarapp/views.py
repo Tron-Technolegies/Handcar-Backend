@@ -2077,9 +2077,18 @@ def Logout(request):
 def add_address(request):
     try:
         data = json.loads(request.body)
+        name = data.get('name')
+        if not name:
+            return JsonResponse({'error': 'Name is required'}, status=400)
+
+        phone_number = data.get('phone_number')
+        if not phone_number:
+            return JsonResponse({'error': 'Phone number is required'}, status=400)
 
         address = Address.objects.create(
             user=request.user,
+            name=name,
+            phone_number=phone_number,
             street=data.get('street'),
             building_name=data.get('building_name'),
             floor_apartment_no=data.get('floor_apartment_no'),
@@ -2112,6 +2121,8 @@ def view_addresses(request):
             address_list = [{
 
                 'id': address.id,
+                'name' : address.name,
+                'phone_number': address.phone_number,
                 'street': address.street,
                 'building_name': address.building_name,
                 'floor_apartment_no': address.floor_apartment_no,
@@ -2186,6 +2197,8 @@ def shipping_address(request):
         for address in addresses:
             address_list.append({
     'id': address.id,
+    'name': address.name,
+    'phone_number': address.phone_number,
     'street': address.street,
     'building_name': address.building_name,
     'floor_apartment_no': address.floor_apartment_no,
