@@ -252,6 +252,8 @@ class Services(models.Model):
         super().save(*args, **kwargs)
 
 
+from datetime import timedelta
+
 class Subscriber(models.Model):
     email = models.EmailField()
     address = models.TextField(blank=True)
@@ -262,18 +264,17 @@ class Subscriber(models.Model):
     duration = models.IntegerField(help_text="Duration in months")
     start_date = models.DateField()
     end_date = models.DateField(blank=True, null=True, help_text="Calculated based on duration and start_date")
-    assigned_vendor = models.ForeignKey(Services, on_delete=models.SET_NULL, null=True, blank=True, related_name="subscribers")
+    assigned_vendors = models.ManyToManyField(Services, blank=True, related_name="subscribers") 
 
     def save(self, *args, **kwargs):
-        # Automatically calculate the end_date based on start_date and duration
         if self.start_date and self.duration:
-            self.end_date = self.start_date + timedelta(days=self.duration * 30)  # Approximation: 30 days per month
+            self.end_date = self.start_date + timedelta(days=self.duration * 30)
 
-        # Geocode address to latitude and longitude if address is provided
         if self.address and (not self.latitude or not self.longitude):
             self.latitude, self.longitude = geocode_address(self.address)
 
         super().save(*args, **kwargs)
+
 
 class ServiceImage(models.Model):
     service = models.ForeignKey('Services', on_delete=models.CASCADE, related_name='images')

@@ -1644,43 +1644,39 @@ def send_vendor_notification(vendor_id, message):
         }
     )
 
-@csrf_exempt
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
 def add_subscriber(request):
     try:
-        data = json.loads(request.body)
+        data = request.data
         email = data.get('email')
         address = data.get('address')
         service_type = data.get('service_type')
         plan = data.get('plan')
         duration = data.get('duration')
         start_date = data.get('start_date')
-        assigned_vendor_id = data.get('assigned_vendor')
+        assigned_vendor_ids = data.get('assigned_vendors', [])
 
         if not User.objects.filter(email=email).exists():
-            return JsonResponse({'error': 'No such user registered.'}, status=400)
+            return Response({'error': 'No such user registered.'}, status=400)
 
-        if start_date:
-            try:
-                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({'error': 'Invalid start_date format.'}, status=400)
-        else:
-            return JsonResponse({'error': 'Start date is required.'}, status=400)
+        if not start_date:
+            return Response({'error': 'Start date is required.'}, status=400)
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid start_date format.'}, status=400)
 
         try:
             duration = int(duration)
         except (ValueError, TypeError):
-            return JsonResponse({'error': 'Duration must be an integer.'}, status=400)
+            return Response({'error': 'Duration must be an integer.'}, status=400)
 
         if not address:
-            return JsonResponse({'error': 'Address is required for geocoding.'}, status=400)
+            return Response({'error': 'Address is required for geocoding.'}, status=400)
 
         subscriber_lat, subscriber_lon = get_geocoded_location(address)
-
-        try:
-            assigned_vendor = Services.objects.get(id=assigned_vendor_id)
-        except Services.DoesNotExist:
-            return JsonResponse({'error': 'Assigned vendor not found.'}, status=404)
 
         subscriber = Subscriber.objects.create(
             email=email,
@@ -1691,37 +1687,41 @@ def add_subscriber(request):
             start_date=start_date,
             latitude=subscriber_lat,
             longitude=subscriber_lon,
-            assigned_vendor=assigned_vendor
         )
 
-        return JsonResponse({'message': 'Subscriber added successfully.', 'id': subscriber.id}, status=200)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+        vendors = Services.objects.filter(id__in=assigned_vendor_ids)
+        subscriber.assigned_vendors.set(vendors)
+
+        return Response({'message': 'Subscriber added successfully.', 'id': subscriber.id}, status=200)
+
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
+        return Response({'error': str(e)}, status=500)
+    
+    
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
 def view_subscribers(request):
-    if request.method == 'GET':
-        search_query = request.GET.get('search', '')
-        if search_query:
-            subscribers = Subscriber.objects.filter(email__icontains=search_query)  # Assuming 'email' not 'name'
-        else:
-            subscribers = Subscriber.objects.all()
+    search_query = request.GET.get('search', '')
+    if search_query:
+        subscribers = Subscriber.objects.filter(email__icontains=search_query)
+    else:
+        subscribers = Subscriber.objects.all()
 
-        data = [{
-            "id": sub.id,
-            "email": sub.email,
-            "address": sub.address,
-            "service_type": sub.service_type,
-            "plan": sub.plan,
-            "duration": sub.duration,
-            "start_date": sub.start_date.strftime('%Y-%m-%d') if sub.start_date else None,
-            "end_date": sub.end_date.strftime('%Y-%m-%d') if sub.end_date else None,
-            "assigned_vendor": sub.assigned_vendor.vendor_name if sub.assigned_vendor else None,
-        } for sub in subscribers]
+    data = [{
+        "id": sub.id,
+        "email": sub.email,
+        "address": sub.address,
+        "service_type": sub.service_type,
+        "plan": sub.plan,
+        "duration": sub.duration,
+        "start_date": sub.start_date.strftime('%Y-%m-%d') if sub.start_date else None,
+        "end_date": sub.end_date.strftime('%Y-%m-%d') if sub.end_date else None,
+        "assigned_vendors": [vendor.vendor_name for vendor in sub.assigned_vendors.all()]
+    } for sub in subscribers]
 
-        return JsonResponse({"user": data},safe=False)
+    return Response({"user": data}, status=200)
 
+    
 @csrf_exempt
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
