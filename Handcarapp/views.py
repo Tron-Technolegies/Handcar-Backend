@@ -3933,6 +3933,9 @@ def send_otp_forget_password(request):
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
 
+import uuid
+from django.core.cache import cache
+
 @csrf_exempt
 def verify_otp_forget_password(request):
     if request.method == 'POST':
@@ -3953,17 +3956,24 @@ def verify_otp_forget_password(request):
             if not otp_obj or not otp_obj.is_valid():
                 return JsonResponse({"error": "Invalid or expired OTP."}, status=400)
 
-            # Optional: mark verified in session or cache
+            # Session-based for web
             request.session[f'otp_verified_{user.id}'] = True
 
-            # Delete OTP after verification
+            # Token-based for mobile
+            otp_token = str(uuid.uuid4())
+            cache.set(f'otp_token_{otp_token}', user.id, timeout=600)  # 10 min
+
             otp_obj.delete()
 
-            return JsonResponse({"message": "OTP verified successfully."})
+            return JsonResponse({
+                "message": "OTP verified successfully.",
+                "otp_token": otp_token  # mobile clients store this
+            })
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
+
 
 @csrf_exempt
 def reset_password_with_otp(request):
@@ -3973,6 +3983,7 @@ def reset_password_with_otp(request):
             email = data.get('email')
             new_password = data.get('new_password')
             confirm_password = data.get('confirm_password')
+            otp_token = data.get('otp_token')  # optional
 
             if not email or not new_password or not confirm_password:
                 return JsonResponse({"error": "All fields are required."}, status=400)
@@ -3985,15 +3996,24 @@ def reset_password_with_otp(request):
             if not user:
                 return JsonResponse({"error": "User not found."}, status=404)
 
-            #  Check OTP was verified (via session or another mechanism)
-            if not request.session.get(f'otp_verified_{user.id}'):
+            # Check web session
+            is_verified = request.session.get(f'otp_verified_{user.id}')
+
+            # Check token if session not present
+            if not is_verified and otp_token:
+                cached_user_id = cache.get(f'otp_token_{otp_token}')
+                if cached_user_id == user.id:
+                    is_verified = True
+                    cache.delete(f'otp_token_{otp_token}')  # clean token
+
+            if not is_verified:
                 return JsonResponse({"error": "OTP not verified."}, status=403)
 
             user.set_password(new_password)
             user.save()
 
-            #  Clean up session
-            del request.session[f'otp_verified_{user.id}']
+            # Clean up session
+            request.session.pop(f'otp_verified_{user.id}', None)
 
             return JsonResponse({"message": "Password reset successful."})
         except Exception as e:

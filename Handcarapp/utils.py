@@ -67,6 +67,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 import json
 import os
+
 from django.conf import settings
 
 def generate_invoice_pdf(order):
