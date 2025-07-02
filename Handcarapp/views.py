@@ -3961,7 +3961,6 @@ def verify_otp_forget_password(request):
             # Mobile: generate and return token
             otp_token = otp_obj.generate_token()
 
-            otp_obj.delete()  # Delete OTP record after verification
 
             return JsonResponse({
                 "message": "OTP verified successfully.",
