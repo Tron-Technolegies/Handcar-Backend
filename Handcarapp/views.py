@@ -4017,3 +4017,34 @@ def reset_password_with_otp(request):
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
+
+
+@api_view(['GET'])
+@authentication_classes([CustomJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def get_subscription_status(request):
+    user = request.user
+    try:
+        subscription = Subscription.objects.get(user=user, is_active=True)
+        vendor = subscription.vendor  
+
+        return Response({
+            "subscribed": True,
+            "plan": {
+                "name": subscription.plan.name,
+                "price": subscription.plan.price,
+                "start_date": subscription.start_date,
+                "end_date": subscription.end_date,
+            },
+            "vendor": {
+                "name": vendor.name,
+                "contact": vendor.contact,
+            }
+        })
+    except Subscription.DoesNotExist:
+        plans = Plan.objects.all()
+        plans_data = [{"id": p.id, "name": p.name, "price": p.price, "features": p.features} for p in plans]
+        return Response({
+            "subscribed": False,
+            "plans": plans_data
+        })

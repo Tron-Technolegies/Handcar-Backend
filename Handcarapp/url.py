@@ -145,6 +145,7 @@ urlpatterns = [
     path('send_otp_forget_password', views.send_otp_forget_password, name='send_otp_forget_password'),
     path('verify_otp_forget_password', views.verify_otp_forget_password, name='verify_otp_forget_password'),
     path('reset_password_with_otp', views.reset_password_with_otp, name='reset_password_with_otp'),
+    path('get_subscription_status',views.get_subscription_status,name='get_subscription_status')
 
 ]
 
