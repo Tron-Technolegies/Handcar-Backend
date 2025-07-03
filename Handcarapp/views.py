@@ -58,6 +58,8 @@ from cloudinary.uploader import upload
 
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
 # Local imports
 from .authentication import CustomJWTAuthentication
@@ -4018,7 +4020,6 @@ def reset_password_with_otp(request):
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
 
-
 @api_view(['GET'])
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated])
@@ -4026,25 +4027,38 @@ def get_subscription_status(request):
     user = request.user
     try:
         subscription = Subscription.objects.get(user=user, is_active=True)
-        vendor = subscription.vendor  
+        vendor = getattr(subscription, 'vendor', None)  # ✅ Safely get vendor
 
         return Response({
             "subscribed": True,
             "plan": {
-                "name": subscription.plan.name,
-                "price": subscription.plan.price,
+                "name": subscription.plan.name if subscription.plan else "Unknown",
+                "price": subscription.plan.price if subscription.plan else 0,
                 "start_date": subscription.start_date,
                 "end_date": subscription.end_date,
             },
             "vendor": {
-                "name": vendor.name,
-                "contact": vendor.contact,
+                "name": vendor.name if vendor else "Not Assigned",
+                "contact": vendor.contact if vendor else "",
             }
         })
+
     except Subscription.DoesNotExist:
         plans = Plan.objects.all()
-        plans_data = [{"id": p.id, "name": p.name, "price": p.price, "features": p.features} for p in plans]
+        plans_data = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "price": p.price,
+                "features": p.features
+            }
+            for p in plans
+        ]
         return Response({
             "subscribed": False,
             "plans": plans_data
         })
+
+    except Exception as e:
+        print("Error in get_subscription_status:", str(e))  # ✅ Will show in log
+        return Response({"error": str(e)}, status=500)
