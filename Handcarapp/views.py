@@ -1678,6 +1678,11 @@ def add_subscriber(request):
         if not address:
             return Response({'error': 'Address is required for geocoding.'}, status=400)
 
+        try:
+            assigned_vendor_ids = [int(v_id) for v_id in assigned_vendor_ids]
+        except ValueError:
+            return Response({'error': 'Invalid vendor ID in assigned_vendors.'}, status=400)
+
         subscriber_lat, subscriber_lon = get_geocoded_location(address)
 
         subscriber = Subscriber.objects.create(
@@ -4027,20 +4032,26 @@ def get_subscription_status(request):
     user = request.user
     try:
         subscription = Subscription.objects.get(user=user, is_active=True)
-        vendor = getattr(subscription, 'vendor', None)  # ✅ Safely get vendor
+        subscriber = Subscriber.objects.get(email=user.email)  # assuming `Subscriber.email` = `User.email`
+
+        assigned_vendors = subscriber.assigned_vendors.all()
 
         return Response({
             "subscribed": True,
             "plan": {
-                "name": subscription.plan.name if subscription.plan else "Unknown",
-                "price": subscription.plan.price if subscription.plan else 0,
+                "name": subscription.plan,
+                "category": subscription.category,
                 "start_date": subscription.start_date,
                 "end_date": subscription.end_date,
+                "duration": subscription.duration_months,
             },
-            "vendor": {
-                "name": vendor.name if vendor else "Not Assigned",
-                "contact": vendor.contact if vendor else "",
-            }
+            "vendors": [
+                {
+                    "id": v.id,
+                    "name": v.name,
+                    "contact": v.contact
+                } for v in assigned_vendors
+            ]
         })
 
     except Subscription.DoesNotExist:
@@ -4059,6 +4070,9 @@ def get_subscription_status(request):
             "plans": plans_data
         })
 
+    except Subscriber.DoesNotExist:
+        return Response({"error": "Subscriber data not found for this user."}, status=404)
+
     except Exception as e:
-        print("Error in get_subscription_status:", str(e))  # ✅ Will show in log
+        print("Error in get_subscription_status:", str(e))
         return Response({"error": str(e)}, status=500)
