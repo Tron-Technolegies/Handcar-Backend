@@ -4031,10 +4031,15 @@ def reset_password_with_otp(request):
 def get_subscription_status(request):
     user = request.user
     try:
+        print("User:", user)
         subscription = Subscription.objects.get(user=user, is_active=True)
-        subscriber = Subscriber.objects.get(email=user.email)  # assuming `Subscriber.email` = `User.email`
+        print("Subscription found:", subscription)
+
+        subscriber = Subscriber.objects.get(email=user.email)
+        print("Subscriber found:", subscriber)
 
         assigned_vendors = subscriber.assigned_vendors.all()
+        print("Assigned vendors:", assigned_vendors)
 
         return Response({
             "subscribed": True,
@@ -4044,6 +4049,7 @@ def get_subscription_status(request):
                 "start_date": subscription.start_date,
                 "end_date": subscription.end_date,
                 "duration": subscription.duration_months,
+                "price": getattr(subscription, "price", "N/A")  # Only if exists
             },
             "vendors": [
                 {
@@ -4055,22 +4061,11 @@ def get_subscription_status(request):
         })
 
     except Subscription.DoesNotExist:
-        plans = Plan.objects.all()
-        plans_data = [
-            {
-                "id": p.id,
-                "name": p.name,
-                "price": p.price,
-                "features": p.features
-            }
-            for p in plans
-        ]
-        return Response({
-            "subscribed": False,
-            "plans": plans_data
-        })
+        print("Subscription not found")
+        return Response({ "subscribed": False })
 
     except Subscriber.DoesNotExist:
+        print("Subscriber not found")
         return Response({"error": "Subscriber data not found for this user."}, status=404)
 
     except Exception as e:
