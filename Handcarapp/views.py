@@ -1646,7 +1646,6 @@ def send_vendor_notification(vendor_id, message):
         }
     )
 
-
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def add_subscriber(request):
@@ -1660,8 +1659,10 @@ def add_subscriber(request):
         start_date = data.get('start_date')
         assigned_vendor_ids = data.get('assigned_vendors', [])
 
-        if not User.objects.filter(email=email).exists():
+        if not email or not User.objects.filter(email=email).exists():
             return Response({'error': 'No such user registered.'}, status=400)
+
+        user = User.objects.get(email=email)
 
         if not start_date:
             return Response({'error': 'Start date is required.'}, status=400)
@@ -1685,7 +1686,12 @@ def add_subscriber(request):
 
         subscriber_lat, subscriber_lon = get_geocoded_location(address)
 
+
+        if Subscriber.objects.filter(user=user).exists():
+            return Response({'error': 'Subscriber already exists for this user.'}, status=400)
+
         subscriber = Subscriber.objects.create(
+            user=user, 
             email=email,
             address=address,
             service_type=service_type,
@@ -1703,7 +1709,7 @@ def add_subscriber(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
-    
+
     
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
@@ -4035,7 +4041,7 @@ def get_subscription_status(request):
         subscription = Subscription.objects.get(user=user, is_active=True)
         print("Subscription found:", subscription)
 
-        subscriber = Subscriber.objects.get(email=user.email)
+        subscriber = Subscriber.objects.get(user=user)
         print("Subscriber found:", subscriber)
 
         assigned_vendors = subscriber.assigned_vendors.all()
@@ -4049,13 +4055,13 @@ def get_subscription_status(request):
                 "start_date": subscription.start_date,
                 "end_date": subscription.end_date,
                 "duration": subscription.duration_months,
-                "price": getattr(subscription, "price", "N/A")  # Only if exists
+                "price": getattr(subscription, "price", "N/A")
             },
             "vendors": [
                 {
                     "id": v.id,
-                    "name": v.name,
-                    "contact": v.contact
+                    "name": getattr(v, 'vendor_name', ''),
+                    "contact": getattr(v, 'phone_number', '')  # Adjust as needed
                 } for v in assigned_vendors
             ]
         })

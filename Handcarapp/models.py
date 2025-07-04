@@ -251,10 +251,11 @@ class Services(models.Model):
 
         super().save(*args, **kwargs)
 
-
-from datetime import timedelta
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class Subscriber(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE) 
     email = models.EmailField()
     address = models.TextField(blank=True)
     latitude = models.FloatField(blank=True, null=True)
