@@ -255,7 +255,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class Subscriber(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE) 
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
     email = models.EmailField()
     address = models.TextField(blank=True)
     latitude = models.FloatField(blank=True, null=True)
