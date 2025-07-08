@@ -4077,3 +4077,90 @@ def get_subscription_status(request):
     except Exception as e:
         print("Error in get_subscription_status:", str(e))
         return Response({"error": str(e)}, status=500)
+
+def delete_subscriber(request, subscriber_id):
+    if request.method == 'DELETE':
+        try:
+            subscriber = Subscriber.objects.get(id=subscriber_id)
+            subscriber.delete()
+            return JsonResponse({"message": "Subscriber deleted successfully."},status=200)
+        except Subscriber.DoesNotExist:
+            return JsonResponse({"error": "Subscriber not found."},status=404)
+    else:
+        return JsonResponse({"error": "Invalid request method."},status=405)  
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
+def edit_subscriber(request, subscriber_id):
+    try:
+        subscriber = Subscriber.objects.get(id=subscriber_id)
+    except Subscriber.DoesNotExist:
+        return Response({'error': 'Subscriber not found.'}, status=404)
+
+    if request.method == 'GET':
+        data = {
+            "id": subscriber.id,
+            "email": subscriber.email,
+            "address": subscriber.address,
+            "service_type": subscriber.service_type,
+            "plan": subscriber.plan,
+            "duration": subscriber.duration,
+            "start_date": subscriber.start_date.strftime('%Y-%m-%d') if subscriber.start_date else None,
+            "end_date": subscriber.end_date.strftime('%Y-%m-%d') if subscriber.end_date else None,
+            "assigned_vendors": [vendor.id for vendor in subscriber.assigned_vendors.all()]
+        }
+        return Response(data, status=200)
+
+    elif request.method == 'POST':
+        data = request.data
+
+        email = data.get('email')
+        address = data.get('address')
+        service_type = data.get('service_type')
+        plan = data.get('plan')
+        duration = data.get('duration')
+        start_date = data.get('start_date')
+        assigned_vendor_ids = data.get('assigned_vendors', [])
+
+        if email:
+            if not User.objects.filter(email=email).exists():
+                return Response({'error': 'User with this email does not exist.'}, status=400)
+            subscriber.email = email
+            subscriber.user = User.objects.get(email=email)
+
+        if address:
+            subscriber.address = address
+            try:
+                lat, lon = get_geocoded_location(address)
+                subscriber.latitude = lat
+                subscriber.longitude = lon
+            except Exception as e:
+                return Response({'error': f'Geocoding failed: {e}'}, status=400)
+
+        if service_type:
+            subscriber.service_type = service_type
+        if plan:
+            subscriber.plan = plan
+        if duration:
+            try:
+                subscriber.duration = int(duration)
+            except ValueError:
+                return Response({'error': 'Invalid duration.'}, status=400)
+        if start_date:
+            try:
+                subscriber.start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'error': 'Invalid start_date format.'}, status=400)
+
+        try:
+            vendor_objs = Services.objects.filter(id__in=assigned_vendor_ids)
+            subscriber.assigned_vendors.set(vendor_objs)
+        except Exception:
+            return Response({'error': 'Invalid assigned vendors.'}, status=400)
+
+        subscriber.save()
+
+        return Response({'message': 'Subscriber updated successfully.'}, status=200)
+
+
