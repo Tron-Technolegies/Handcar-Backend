@@ -256,23 +256,24 @@ def view_products(request):
 
         # Prepare response data
         data = [
-            {
-                "id": product.id,
-                "name": product.name,
-                "category": product.category.name if product.category else None,
-                "brand": product.brand.name if product.brand else None,
-                "price": product.price,
-                "stock": product.stock,
-                "image": product.image if product.image else None,
-                "description": product.description,
-                "discount_percentage": product.discount_percentage,
-                "is_bestseller": product.is_bestseller,
-                "average_rating": round(
+        {
+            "id": product.id,
+            "name": product.name,
+            "category": product.category.name if product.category else None,
+            "brand": product.brand.name if product.brand else None,
+            "original_price": float(product.price),
+            "discounted_price": float(product.discounted_price),
+            "stock": product.stock,
+            "image": product.image if product.image else None,
+            "description": product.description,
+            "discount_percentage": product.discount_percentage,
+            "is_bestseller": product.is_bestseller,
+            "average_rating": round(
                 sum(review.rating for review in product.reviews.all()) / product.reviews.count(), 1
-                ) if product.reviews.exists() else 0,
-                "total_reviews": product.reviews.count(),
-            }
-            for product in products
+            ) if product.reviews.exists() else 0,
+            "total_reviews": product.reviews.count(),
+        }
+        for product in products
         ]
 
         return JsonResponse({"product": data}, safe=False)
@@ -1523,7 +1524,6 @@ def promote_product(request):
 
 def view_promoted_products(request):
     if request.method == 'GET':
-        # Filter products where promoted is True
         promoted_products = Product.objects.filter(promoted=True)
 
         promoted_products_list = [
@@ -1532,17 +1532,26 @@ def view_promoted_products(request):
                 "name": product.name,
                 "category": product.category.name,
                 "brand": product.brand.name,
-                "price": str(product.price),
+                "original_price": float(product.price),
+                "discounted_price": float(product.discounted_price),
+                "discount_percentage": product.discount_percentage,
                 "description": product.description,
                 "is_bestseller": product.is_bestseller,
-                "discount_percentage": product.discount_percentage,
                 "image": product.image,
                 "created_at": product.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             }
             for product in promoted_products
         ]
 
-        return JsonResponse({"promoted_products": promoted_products_list}, status=200)
+        try:
+            max_discount = promoted_products.aggregate(Max('discount_percentage'))['discount_percentage__max'] or 0
+        except:
+            max_discount = 0
+
+        return JsonResponse({
+            "promoted_products": promoted_products_list,
+            "max_discount": max_discount
+        }, status=200)
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
 
@@ -3609,7 +3618,10 @@ def promoted_brands_products(request):
     promoted_brands = Brand.objects.filter(promoted=True)
     brands_products = Product.objects.filter(brand__in=promoted_brands)
 
-    max_discount = brands_products.aggregate(Max('discount_percentage'))['discount_percentage__max'] or 0
+    try:
+        max_discount = brands_products.aggregate(Max('discount_percentage'))['discount_percentage__max'] or 0
+    except:
+        max_discount = 0
 
     product_list = []
     for product in brands_products:

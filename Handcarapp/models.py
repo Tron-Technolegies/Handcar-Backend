@@ -51,9 +51,10 @@ class Product(models.Model):
 
     @property
     def discounted_price(self):
-        if self.discount_percentage > 0:
-            return self.price * (1 - (self.discount_percentage / 100))
+        if self.discount_percentage:
+            return self.price - (self.price * self.discount_percentage / 100)
         return self.price
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
