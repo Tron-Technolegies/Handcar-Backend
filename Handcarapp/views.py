@@ -3602,22 +3602,30 @@ def update_order_status(request, order_id):
         return Response({'error': 'Order not found'}, status=404)
 
 
+from django.db.models import Max
+
+@api_view(['GET'])
 def promoted_brands_products(request):
-    if request.method == 'GET':
-        promoted_brands = Brand.objects.filter(promoted=True)
-        brands_products = Product.objects.filter(brand__in=promoted_brands)
-        product_list = [
-            {
-                "id": product.id,
-                "name": product.name,
-                "price": product.price,
-                "image": product.image if product.image else None
-            }
-                for product in brands_products
-        ]
-        
-        return JsonResponse({"promoted_brands_products": product_list}, status=200)
-    return JsonResponse({"error": "Invalid HTTP method."}, status=405)
+    promoted_brands = Brand.objects.filter(promoted=True)
+    brands_products = Product.objects.filter(brand__in=promoted_brands)
+
+    max_discount = brands_products.aggregate(Max('discount_percentage'))['discount_percentage__max'] or 0
+
+    product_list = []
+    for product in brands_products:
+        product_list.append({
+            "id": product.id,
+            "name": product.name,
+            "original_price": float(product.price),
+            "discount_percentage": product.discount_percentage,
+            "discounted_price": float(product.discounted_price),
+            "image": product.image if product.image else None
+        })
+
+    return Response({
+        "promoted_brands_products": product_list,
+        "max_discount": max_discount
+    })
 
 
 
@@ -4030,22 +4038,25 @@ def reset_password_with_otp(request):
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
-
 @api_view(['GET'])
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated])
 def get_subscription_status(request):
     user = request.user
     try:
-        print("User:", user)
         subscription = Subscription.objects.get(user=user, is_active=True)
-        print("Subscription found:", subscription)
-
         subscriber = Subscriber.objects.get(user=user)
-        print("Subscriber found:", subscriber)
-
         assigned_vendors = subscriber.assigned_vendors.all()
-        print("Assigned vendors:", assigned_vendors)
+
+        try:
+            plan_obj = Plan.objects.get(
+                name=subscription.plan,
+                service_type=subscription.category,
+                duration=subscription.duration_months
+            )
+            plan_price = plan_obj.price
+        except Plan.DoesNotExist:
+            plan_price = "N/A"
 
         return Response({
             "subscribed": True,
@@ -4055,27 +4066,24 @@ def get_subscription_status(request):
                 "start_date": subscription.start_date,
                 "end_date": subscription.end_date,
                 "duration": subscription.duration_months,
-                "price": getattr(subscription, "price", "N/A")
+                "price": plan_price
             },
             "vendors": [
                 {
                     "id": v.id,
                     "name": getattr(v, 'vendor_name', ''),
-                    "contact": getattr(v, 'phone_number', '')  # Adjust as needed
+                    "contact": getattr(v, 'phone_number', '')
                 } for v in assigned_vendors
             ]
         })
 
     except Subscription.DoesNotExist:
-        print("Subscription not found")
         return Response({ "subscribed": False })
 
     except Subscriber.DoesNotExist:
-        print("Subscriber not found")
         return Response({"error": "Subscriber data not found for this user."}, status=404)
 
     except Exception as e:
-        print("Error in get_subscription_status:", str(e))
         return Response({"error": str(e)}, status=500)
 
 def delete_subscriber(request, subscriber_id):
