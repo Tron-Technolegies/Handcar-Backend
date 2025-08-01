@@ -15,6 +15,8 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
+from django.core.paginator import Paginator
+
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import (
@@ -214,8 +216,6 @@ def login_with_otp(request):
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
 
-
-
 @csrf_exempt
 def view_products(request):
     if request.method == 'GET':
@@ -225,58 +225,63 @@ def view_products(request):
         min_price = request.GET.get('min_price', '')
         max_price = request.GET.get('max_price', '')
         sort_order = request.GET.get('sort', '')  # 'asc' or 'desc'
+        page = int(request.GET.get('page', 1))  #  get current page
+        per_page = int(request.GET.get('limit', 10))  #  default items per page
 
         products = Product.objects.all()
 
-        # Filter by search query
+        # Filters
         if search_query:
             products = products.filter(name__icontains=search_query)
-
-        #  Multi-category filter (comma-separated)
         if category:
             category_list = [c.strip() for c in category.split(',')]
             products = products.filter(category__name__in=category_list)
-
-        #  Multi-brand filter (comma-separated)
         if brand:
             brand_list = [b.strip() for b in brand.split(',')]
             products = products.filter(brand__name__in=brand_list)
-
-        # Filter by price range
         if min_price:
             products = products.filter(price__gte=min_price)
         if max_price:
             products = products.filter(price__lte=max_price)
-
-        # Sorting by price
         if sort_order == 'asc':
             products = products.order_by('price')
         elif sort_order == 'desc':
             products = products.order_by('-price')
 
-        # Prepare response data
+        # Apply pagination
+        paginator = Paginator(products, per_page)
+        paginated_products = paginator.get_page(page)
+
+        # Prepare paginated response
         data = [
-        {
-            "id": product.id,
-            "name": product.name,
-            "category": product.category.name if product.category else None,
-            "brand": product.brand.name if product.brand else None,
-            "original_price": float(product.price),
-            "discounted_price": float(product.discounted_price),
-            "stock": product.stock,
-            "image": product.image if product.image else None,
-            "description": product.description,
-            "discount_percentage": product.discount_percentage,
-            "is_bestseller": product.is_bestseller,
-            "average_rating": round(
-                sum(review.rating for review in product.reviews.all()) / product.reviews.count(), 1
-            ) if product.reviews.exists() else 0,
-            "total_reviews": product.reviews.count(),
-        }
-        for product in products
+            {
+                "id": product.id,
+                "name": product.name,
+                "category": product.category.name if product.category else None,
+                "brand": product.brand.name if product.brand else None,
+                "original_price": float(product.price),
+                "discounted_price": float(product.discounted_price),
+                "stock": product.stock,
+                "image": product.image if product.image else None,
+                "description": product.description,
+                "discount_percentage": product.discount_percentage,
+                "is_bestseller": product.is_bestseller,
+                "average_rating": round(
+                    sum(review.rating for review in product.reviews.all()) / product.reviews.count(), 1
+                ) if product.reviews.exists() else 0,
+                "total_reviews": product.reviews.count(),
+            }
+            for product in paginated_products
         ]
 
-        return JsonResponse({"product": data}, safe=False)
+        return JsonResponse({
+            "products": data,
+            "total": paginator.count,
+            "page": paginated_products.number,
+            "pages": paginator.num_pages,
+            "has_next": paginated_products.has_next(),
+            "has_previous": paginated_products.has_previous(),
+        })
 
     return JsonResponse({'error': 'Invalid request method'}, status=400)
 
@@ -4050,6 +4055,7 @@ def reset_password_with_otp(request):
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method."}, status=405)
+
 @api_view(['GET'])
 @authentication_classes([CustomJWTAuthentication])
 @permission_classes([IsAuthenticated])
